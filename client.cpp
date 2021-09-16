@@ -28,6 +28,8 @@ namespace websocket = beast::websocket; // from <boost/beast/websocket.hpp>
 namespace net = boost::asio;            // from <boost/asio.hpp>
 using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 
+using namespace std;
+
 //------------------------------------------------------------------------------
 
 // Report a failure
@@ -123,6 +125,14 @@ public:
         // See https://tools.ietf.org/html/rfc7230#section-5.4
         host_ += ':' + std::to_string(ep.port());
 
+ boost::beast::websocket::permessage_deflate opt;
+        opt.client_enable = true; // for clients
+    opt.server_enable = true; // for servers
+    opt.client_no_context_takeover = false;
+    opt.server_no_context_takeover = false;
+
+        ws_.set_option(opt);
+
         // Perform the websocket handshake
         ws_.async_handshake(host_, "/",
             beast::bind_front_handler(
@@ -169,13 +179,22 @@ public:
     {
         boost::ignore_unused(bytes_transferred);
 
+        string message(boost::asio::buffer_cast<const char*>(buffer_.data()), buffer_.size());
+      cout << "Read: " << message << endl;
+
         if(ec)
             return fail(ec, "read");
 
         // Close the WebSocket connection
-        ws_.async_close(websocket::close_code::normal,
+      //  ws_.async_close(websocket::close_code::normal,
+        //    beast::bind_front_handler(
+         //       &session::on_close,
+           //     shared_from_this()));
+
+      ws_.async_read(
+            buffer_,
             beast::bind_front_handler(
-                &session::on_close,
+                &session::on_read,
                 shared_from_this()));
     }
 

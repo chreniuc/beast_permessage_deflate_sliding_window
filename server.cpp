@@ -24,7 +24,10 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <chrono>
 #include <vector>
+
+#include "text.hpp"
 
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
@@ -32,6 +35,7 @@ namespace websocket = beast::websocket; // from <boost/beast/websocket.hpp>
 namespace net = boost::asio;            // from <boost/asio.hpp>
 using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 
+using namespace std;
 //------------------------------------------------------------------------------
 
 // Report a failure
@@ -46,6 +50,8 @@ class session : public std::enable_shared_from_this<session>
 {
     websocket::stream<beast::tcp_stream> ws_;
     beast::flat_buffer buffer_;
+    std::string to_be_sent{"Hello1234567890qwertyuiopasdfghjklzxcvbnm"};
+    size_t counter{0};
 
 public:
     // Take ownership of the socket
@@ -74,6 +80,17 @@ public:
     on_run()
     {
         // Set suggested timeout settings for the websocket
+        ws_.set_option(
+            websocket::stream_base::timeout::suggested(
+                beast::role_type::server));
+
+        boost::beast::websocket::permessage_deflate opt;
+    opt.client_enable = true; // for clients
+    opt.server_enable = true; // for servers
+    opt.client_no_context_takeover = false;
+    opt.server_no_context_takeover = false;
+
+        ws_.set_option(opt);
         ws_.set_option(
             websocket::stream_base::timeout::suggested(
                 beast::role_type::server));
@@ -119,6 +136,8 @@ public:
         beast::error_code ec,
         std::size_t bytes_transferred)
     {
+      string message(boost::asio::buffer_cast<const char*>(buffer_.data()), buffer_.size());
+      cout << "Read: " << message << endl;
         boost::ignore_unused(bytes_transferred);
 
         // This indicates that the session was closed
@@ -131,7 +150,7 @@ public:
         // Echo the message
         ws_.text(ws_.got_text());
         ws_.async_write(
-            buffer_.data(),
+            boost::asio::buffer(text_to_be_sent),
             beast::bind_front_handler(
                 &session::on_write,
                 shared_from_this()));
@@ -142,6 +161,17 @@ public:
         beast::error_code ec,
         std::size_t bytes_transferred)
     {
+        counter++;
+        if(counter == 1 )
+        {
+            do_read();
+        }
+         if(counter %2 == 0)
+        {
+            cout << "Sent 2 messages" << endl;
+            return;
+        }
+        cout << "Write: " << endl;
         boost::ignore_unused(bytes_transferred);
 
         if(ec)
@@ -150,8 +180,15 @@ public:
         // Clear the buffer
         buffer_.consume(buffer_.size());
 
+         this_thread::sleep_for(chrono::seconds(1));
+         ws_.async_write(
+            boost::asio::buffer(text_to_be_sent),
+            beast::bind_front_handler(
+                &session::on_write,
+                shared_from_this()));
+
         // Do another read
-        do_read();
+       // do_read();
     }
 };
 
